@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PixelSleuth - Image Forensics Tool</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --abyss:#031a1a; --deep:#07302f; --teal:#2f7f78; --mist:#8fc4b8;
+  --glow:#f3e9b4; --moss:#9aa63c;
+  --danger:#f08a6e; --warn:#ecc65c; --ok:#86d9a4; --muted:#7fa7a0;
+  --line:rgba(143,196,184,.2); --panel:rgba(7,48,47,.62);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  min-height:100vh; color:var(--mist); background:var(--abyss);
+  font:15px/1.65 "JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  background-image:radial-gradient(120% 70% at 50% 0%,#2a7a70 0%,#0b3d3a 38%,var(--abyss) 80%);
+  background-attachment:fixed;
+}
+#sea{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
+main{position:relative;z-index:1;max-width:920px;margin:0 auto;padding:6vh 20px 80px}
+
+/* hero: title with its mirrored reflection on the water */
+.hero{text-align:center;padding:4vh 0 5vh}
+.title{font-size:clamp(2.4rem,9vw,5rem);font-weight:700;color:var(--glow);letter-spacing:-.03em;line-height:1;margin:0;text-shadow:0 0 40px rgba(243,233,180,.25)}
+.title.mirror{transform:scaleY(-1);opacity:.22;margin-top:.15em;filter:blur(1.2px);
+  -webkit-mask-image:linear-gradient(to top,#000,transparent 85%);mask-image:linear-gradient(to top,#000,transparent 85%);
+  animation:ripple 7s ease-in-out infinite;user-select:none}
+@keyframes ripple{0%,100%{transform:scaleY(-1) skewX(0)}50%{transform:scaleY(-1) skewX(-2.5deg)}}
+.lede{max-width:46ch;margin:1.6rem auto 0;color:var(--muted)}
+
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+
+/* upload */
+.drop{display:block;padding:34px 22px;text-align:center;cursor:pointer;border:1px dashed rgba(143,196,184,.45);
+  border-radius:14px;transition:background .2s,border-color .2s}
+.drop:hover,.drop.over,.drop:focus-within{background:rgba(47,127,120,.2);border-color:var(--glow)}
+.drop input{position:absolute;opacity:0;width:1px;height:1px}
+.drop strong{color:var(--glow);font-weight:500}
+.drop small{display:block;color:var(--muted);margin-top:4px}
+#preview{display:none;max-height:150px;max-width:100%;border-radius:8px;margin:0 auto 14px;border:1px solid var(--line)}
+.btn{margin-top:14px;width:100%;padding:14px;border:0;border-radius:10px;cursor:pointer;
+  font:700 15px "JetBrains Mono",monospace;color:var(--abyss);background:var(--glow);transition:transform .15s,box-shadow .2s}
+.btn:hover:not(:disabled){box-shadow:0 0 28px rgba(243,233,180,.35);transform:translateY(-1px)}
+.btn:disabled{opacity:.45;cursor:wait}
+:focus-visible{outline:2px solid var(--glow);outline-offset:3px}
+
+/* loading */
+#loading{text-align:center;padding:40px 0;color:var(--muted)}
+.sonar{width:54px;height:54px;margin:0 auto 14px;border-radius:50%;border:2px solid var(--glow);animation:ping 1.6s ease-out infinite}
+@keyframes ping{0%{transform:scale(.3);opacity:1}100%{transform:scale(1.3);opacity:0}}
+.hidden{display:none!important}
+
+/* verdict */
+#verdictCard{margin:28px 0 20px;padding:26px 28px;border-left:5px solid var(--muted)}
+#verdictCard[data-level=danger]{border-left-color:var(--danger)}
+#verdictCard[data-level=warning]{border-left-color:var(--warn)}
+#verdictCard[data-level=success]{border-left-color:var(--ok)}
+.kicker{color:var(--muted);font-size:.8rem;margin:0 0 6px}
+#verdictTitle{margin:0 0 8px;font-size:clamp(1.4rem,4vw,2rem);line-height:1.2;color:var(--glow)}
+#verdictCard[data-level=danger] #verdictTitle{color:var(--danger)}
+#verdictCard[data-level=warning] #verdictTitle{color:var(--warn)}
+#verdictCard[data-level=success] #verdictTitle{color:var(--ok)}
+#verdictDetail{margin:0}
+
+.grid{display:grid;grid-template-columns:1.4fr 1fr;gap:20px}
+@media(max-width:720px){.grid{grid-template-columns:1fr}}
+.panel.pad{padding:22px 24px}
+h2{margin:0 0 12px;font-size:1rem;font-weight:700;color:var(--glow)}
+#reportContent{white-space:pre-wrap;font-size:.88rem;line-height:1.75}
+#heatmapContainer{text-align:center;color:var(--muted);font-size:.85rem}
+.heatmap-img{max-width:100%;height:auto;border-radius:8px;border:1px solid var(--line)}
+
+.checks{margin-top:20px}
+.check{display:grid;grid-template-columns:1fr auto;gap:4px 16px;padding:14px 0;border-bottom:1px solid var(--line)}
+.check:last-child{border-bottom:0}
+.check b{color:var(--glow);font-weight:500}
+.check p{grid-column:1/-1;margin:0;color:var(--muted);font-size:.85rem}
+.pill{align-self:start;font-size:.78rem;padding:2px 12px;border-radius:99px;border:1px solid currentColor}
+.pill.ok{color:var(--ok)} .pill.suspicious{color:var(--danger)}
+.pill.inconclusive{color:var(--warn)} .pill.unavailable{color:var(--muted)}
+.pill::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:currentColor;margin-right:7px}
+
+#results{animation:rise .6s ease both}
+@keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<canvas id="sea" aria-hidden="true"></canvas>
+
+<main>
+  <header class="hero">
+    <h1 class="title">PixelSleuth</h1>
+    <div class="title mirror" aria-hidden="true">PixelSleuth</div>
+    <p class="lede">Drop in an image. Three forensic layers check whether it was edited or generated.</p>
+  </header>
+
+  <form id="uploadForm" class="panel" style="padding:14px">
+    <label class="drop" id="drop">
+      <img id="preview" alt="Selected image preview">
+      <input type="file" id="imageInput" accept="image/*" required>
+      <span id="dropText"><strong>Choose an image</strong> or drag it here<small>JPG, PNG or WebP</small></span>
+    </label>
+    <button type="submit" class="btn" id="submitBtn">Analyze image</button>
+  </form>
+
+  <div id="loading" class="hidden" role="status">
+    <div class="sonar"></div>
+    Scanning pixels and running the AI classifier...
+  </div>
+
+  <section id="results" class="hidden">
+    <div id="verdictCard" class="panel" data-level="neutral">
+      <p class="kicker">Final conclusion</p>
+      <h2 id="verdictTitle"></h2>
+      <p id="verdictDetail"></p>
+    </div>
+
+    <div class="grid">
+      <div class="panel pad">
+        <h2>Explanation (<span id="reportSource">Summary</span>)</h2>
+        <div id="reportContent"></div>
+      </div>
+      <div class="panel pad">
+        <h2>Evidence heatmap</h2>
+        <div id="heatmapContainer">No localized anomaly heatmap generated for this image.</div>
+      </div>
+    </div>
+
+    <div class="panel pad checks">
+      <h2>Forensic checks</h2>
+      <div id="checksList"></div>
+    </div>
+  </section>
+</main>
+
+<script>
+/* drifting particles, like silt in deep water */
+(function(){
+  const c=document.getElementById('sea'),x=c.getContext('2d');
+  let w,h,dots=[];
+  const still=matchMedia('(prefers-reduced-motion:reduce)').matches;
+  function size(){w=c.width=innerWidth;h=c.height=innerHeight;
+    dots=Array.from({length:Math.min(220,Math.floor(w*h/9000))},()=>({
+      x:Math.random()*w,y:Math.random()*h,r:Math.random()*1.6+.4,
+      s:Math.random()*.25+.05,d:Math.random()*6,
+      c:Math.random()<.3?'154,166,60':'243,233,180'}));}
+  function draw(t){
+    x.clearRect(0,0,w,h);
+    for(const p of dots){
+      p.y-=p.s; p.x+=Math.sin(t/2000+p.d)*.15;
+      if(p.y<-5){p.y=h+5;p.x=Math.random()*w}
+      x.fillStyle='rgba('+p.c+','+(.25+.3*Math.abs(Math.sin(t/1500+p.d)))+')';
+      x.beginPath();x.arc(p.x,p.y,p.r,0,6.283);x.fill();
+    }
+    if(!still)requestAnimationFrame(draw);
+  }
+  addEventListener('resize',size);size();requestAnimationFrame(draw);
+})();
+
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+
+/* file picking: preview + drag and drop */
+function showPreview(file){
+  if(!file)return;
+  const p=$('preview');p.src=URL.createObjectURL(file);p.style.display='block';
+  $('dropText').innerHTML='<strong>'+esc(file.name)+'</strong><small>Click to choose a different image</small>';
+}
+$('imageInput').addEventListener('change',e=>showPreview(e.target.files[0]));
+['dragenter','dragover'].forEach(ev=>$('drop').addEventListener(ev,e=>{e.preventDefault();$('drop').classList.add('over')}));
+['dragleave','drop'].forEach(ev=>$('drop').addEventListener(ev,e=>{e.preventDefault();$('drop').classList.remove('over')}));
+$('drop').addEventListener('drop',e=>{
+  if(e.dataTransfer.files.length){$('imageInput').files=e.dataTransfer.files;showPreview(e.dataTransfer.files[0]);}
+});
+
+$('uploadForm').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const file=$('imageInput').files[0];
+  if(!file)return;
+  const fd=new FormData();fd.append('file',file);
+  $('loading').classList.remove('hidden');
+  $('results').classList.add('hidden');
+  $('submitBtn').disabled=true;
+  try{
+    const res=await fetch('/analyze',{method:'POST',body:fd});
+    if(!res.ok)throw new Error('Analysis failed on the server.');
+    displayResults(await res.json());
+  }catch(err){
+    alert('Analysis failed: '+err.message);
+  }finally{
+    $('loading').classList.add('hidden');
+    $('submitBtn').disabled=false;
+  }
+});
+
+function displayResults(data){
+  $('verdictCard').dataset.level=data.verdict_level||'neutral';
+  $('verdictTitle').textContent=data.verdict_status;
+  $('verdictDetail').textContent=data.verdict_detail;
+  $('reportSource').textContent=data.report_source==='gemini'?'AI explanation':'Automated summary';
+  $('reportContent').textContent=data.report;
+
+  $('heatmapContainer').innerHTML=data.heatmap
+    ?'<img src="data:image/png;base64,'+data.heatmap+'" class="heatmap-img" alt="Forensic heatmap">'
+    :'No localized anomaly heatmap generated for this image.';
+
+  $('checksList').innerHTML=(data.checks||[]).map(c=>{
+    const st=['ok','suspicious','inconclusive'].includes(c.status)?c.status:'unavailable';
+    return '<div class="check"><b>'+esc(c.name)+'</b><span class="pill '+st+'">'+esc(c.status)+'</span><p>'+esc(c.detail)+'</p></div>';
+  }).join('');
+
+  const r=$('results');r.classList.remove('hidden');
+  r.style.animation='none';r.offsetHeight;r.style.animation='';
+  r.scrollIntoView({behavior:'smooth',block:'start'});
+}
+</script>
+</body>
+</html>

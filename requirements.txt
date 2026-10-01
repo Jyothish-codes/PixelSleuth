@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+Pillow
+c2pa-python
+opencv-python-headless
+numpy
+transformers
+torch
+google-genai
+python-multipart
